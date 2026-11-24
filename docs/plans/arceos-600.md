@@ -87,7 +87,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 | 里程碑 | 状态 | 证据 |
 |---|---|---|
 | M0 | ✅ | 工具链/交叉编译/qemu/mtools 四项复核通过(rustup active-toolchain=nightly-2024-09-04,musl 11.2.1,qemu 8.2.2,mcopy 4.0.32);六题逐题 timeout 基线全非 0(print 17s, ramfs 159s, alt_alloc 17s, hashmap 13s, sys_map 179s, simple_hv exit124@315s),pass 数 0;git status 空 |
-| M1 | ⬜ | — |
+| M1 | ✅ | 本地两次 test-print 均 pass,审核者复跑一次 pass(exit 0);commit 142bbd1 仅改 print_with_color/main.rs(2+/1-),`git diff HEAD~1..HEAD -- '*test*'` 空;push 后 run 45321328396:grade job=failure(未满六题,设计内)、upload job=success(OpenCamp accepted);榜单 rank62 score=100 |
 | M2 | ⬜ | — |
 | M3 | ⬜ | — |
 | M4 | ⬜ | — |
