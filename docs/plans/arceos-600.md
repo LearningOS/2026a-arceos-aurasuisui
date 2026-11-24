@@ -76,7 +76,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 | **M2** | 第 2 题 ramfs 改名 | RAM 文件系统同目录 rename,`/tmp/f1` 改名后读回内容 | WSLTEST `timeout -k 5 300 ./scripts/test-ramfs_rename.sh` 打印 `ramfs_rename pass` 且 exit 0;六题逐题 pass 数 >=2 |
 | **M3** | 第 3 题替代分配器 | 练习走替代分配器,300 万元素向量分配与排序通过 | WSLTEST `timeout -k 5 300 ./scripts/test-alt_alloc.sh` 打印 `alt_alloc pass` 且 exit 0;六题逐题 pass 数 >=3 |
 | **M4** | 第 4 题 HashMap | axstd 提供 `HashMap`,五万条插入与遍历断言通过 | WSLTEST `timeout -k 5 300 ./scripts/test-support_hashmap.sh` 打印 `support_hashmap pass` 且 exit 0;六题逐题 pass 数 >=4 |
-| **M5** | 第 5 题文件映射 | 补齐文件映射系统调用,用户程序读回 `hello, arceos!` | WSLTEST `timeout -k 5 300 ./scripts/test-sys_map.sh` 打印 `sys_map pass` 且 exit 0;六题逐题 pass 数 >=5 |
+| **M5** | 第 5 题文件映射 | 补齐文件映射系统调用,用户程序读回 `hello, arceos!` | WSLTEST `timeout -k 5 300 ./scripts/test-sys_map.sh` 打印 `sys_mmap pass` 且 exit 0;六题逐题 pass 数 >=5 |
 | **M6** | 第 6 题 Hypervisor | 处理客体 VM 退出,`skernel2` 正常关机 | WSLTEST `timeout -k 5 300 ./scripts/test-simple_hv.sh` 打印 `simple_hv pass` 且 exit 0;六题逐题 pass 数 = 6 |
 | **M7** | 最终 push 与晋级核对 | 六题全绿后 push 一次,等 Actions 上传,核对榜单;可选在 Docker 官方镜像复跑一次 total-test 做平价复核 | `gh run list` 最新 grading success 且上传 job success;榜单 `aurasuisui`=600;`git status --porcelain` 为空;若做 Docker 复核,其末行也是 600 |
 
@@ -91,7 +91,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 | M2 | ✅ | 审核者复跑 `test-ramfs_rename.sh` → `[Ramfs-Rename]: ok!` + `ramfs_rename pass`,exit 0(149 s);commit 5a01d21 仅改 `modules/axfs/src/root.rs`(+71/-10),`-- '*test*'` 空;第 1 题回归 pass;工作树干净 |
 | M3 | ✅ | 审核者复跑 `test-alt_alloc.sh` → `Bump tests run OK!` + `alt_alloc pass`,exit 0(50 s),第 1 题回归 pass(17 s);commit 211bbc7 仅改 `bump_allocator/src/lib.rs`(+159)与 `alt_axalloc/src/lib.rs`(+13),`-- '*test*'` 空;实现为双端 bump,越界返回 NoMemory |
 | M4 | ✅ | 审核者复跑 `test-support_hashmap.sh` → `Memory tests run OK!` + `support_hashmap pass`,exit 0(80 s);第 3 题回归 pass(52 s)、第 1 题回归 pass(18 s);commit f15bfaf 只动 `ulib/axstd`(新增 collections/hash_map.rs 465 行),无 unsafe、无调试输出,`-- '*test*'` 空 |
-| M5 | ⬜ | — |
+| M5 | ✅ | 审核者复跑 `test-sys_map.sh` → `Read back content: hello, arceos!` + `MapFile ok!` + `sys_mmap pass`,exit 0(178 s);第 1 题(19 s)、第 3 题(53 s)回归 pass;commit bdc32d6 仅改 `exercises/sys_map/src/syscall.rs`(+92/-3),`-- '*test*'` 空 |
 | M6 | ⬜ | — |
 | M7 | ⬜ | — |
 
@@ -150,6 +150,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 - 题解只面向六题断言,不追求通用性(如 HashMap 为 O(n));Docker 环境一致性未在本计划闭环,若线上 grading 与本地结论冲突,以线上为准并回退到镜像复核。
 - 第 2 题用「拷贝内容 + 删源」兜底,**不保持 inode**;兜底非原子(中途失败留半成品);不支持目录改名;`RootDirectory::rename` 的原生 rename 分支(fatfs)在本套练习里不可达,属未测路径。
 - 第 3 题的 EarlyAllocator:页区只增不减(`dealloc_pages` 空实现);`add_memory` 只支持单个连续区间;`axhal::paging`/`axmm`/`axdma` 仍硬编码 `axalloc::global_allocator`,只有 `axruntime`/`axstd` 入口在 `alt_alloc` 下走 `alt_axalloc`(同开 alloc+alt_alloc 会重复定义 `init_allocator`)。
+- 第 5 题只支持最小场景:`addr=NULL`、`MAP_PRIVATE`、`PROT_READ`、`offset=0`、文件 fd;其余返回 ENOSYS/EINVAL。用户载荷 `mapfile` 是 ET_DYN(PIE),现有 loader 不做重定位;`mapfile.c` 用 `addr == NULL` 判失败(而非 MAP_FAILED)。均未修,属课程侧遗留。
 - 第 4 题的 HashMap 是自实现(SwissTable 风格:ctrl 标签 + u32 槽位 + 稠密 entries),确定性 FNV-1a + splitmix,无 `entry()` API、无 `HashSet`/`RandomState`,单表上限 u32::MAX 条,迭代序为插入序;不抗碰撞 DoS。
 - 本地验收耗时受 `qemu.log` 影响:`scripts/make/qemu.mk` 默认 `QEMU_LOG=y` 把 `-d in_asm,int,mmu,pcall,cpu_reset,guest_errors` 写进 9p 上的 `arceos/qemu.log`,内存访问密集的题(如第 4 题)会从数秒放大到 80 s;CI 在本地盘上不受影响,本地一律 300 s 超时包裹。
 - WSL 侧 git 无 `user.name/user.email`,所有提交在 Windows 侧执行(两侧同一工作树),不改 git 配置。
