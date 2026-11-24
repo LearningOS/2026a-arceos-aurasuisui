@@ -10,7 +10,7 @@
 | 改动 | 性质 | 依据 |
 |---|---|---|
 | `arceos/exercises/*/src/*.rs` 六个练习入口 | 实现练习 | 仓库 README 六题表 |
-| `arceos/axfs_ramfs/src/*`、`arceos/modules/alt_axalloc/*`、`arceos/modules/bump_allocator/*`、`arceos/ulib/axstd/src/*` | 内核组件补全 | STUDENT_GUIDE 的从入口跟到组件 |
+| `arceos/modules/axfs/src/root.rs`、`arceos/modules/alt_axalloc/*`、`arceos/modules/bump_allocator/*`、`arceos/ulib/axstd/src/*` | 内核组件补全 | STUDENT_GUIDE 的从入口跟到组件;注意 `arceos/axfs_ramfs/` 是构建外死代码(见 9.已知债) |
 | WSL 内工具链(rustup toolchain、musl 交叉编译器、qemu 8.2.2 PATH) | 环境,不进版本库 | Dockerfile 的 pin |
 | `docs/plans/arceos-600.md`(本文件) | 契约 | 本计划 |
 
@@ -88,7 +88,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 |---|---|---|
 | M0 | ✅ | 工具链/交叉编译/qemu/mtools 四项复核通过(rustup active-toolchain=nightly-2024-09-04,musl 11.2.1,qemu 8.2.2,mcopy 4.0.32);六题逐题 timeout 基线全非 0(print 17s, ramfs 159s, alt_alloc 17s, hashmap 13s, sys_map 179s, simple_hv exit124@315s),pass 数 0;git status 空 |
 | M1 | ✅ | 本地两次 test-print 均 pass,审核者复跑一次 pass(exit 0);commit 142bbd1 仅改 print_with_color/main.rs(2+/1-),`git diff HEAD~1..HEAD -- '*test*'` 空;push 后 run 45321328396:grade job=failure(未满六题,设计内)、upload job=success(OpenCamp accepted);榜单 rank62 score=100 |
-| M2 | ⬜ | — |
+| M2 | ✅ | 审核者复跑 `test-ramfs_rename.sh` → `[Ramfs-Rename]: ok!` + `ramfs_rename pass`,exit 0(149 s);commit 5a01d21 仅改 `modules/axfs/src/root.rs`(+71/-10),`-- '*test*'` 空;第 1 题回归 pass;工作树干净 |
 | M3 | ⬜ | — |
 | M4 | ⬜ | — |
 | M5 | ⬜ | — |
@@ -146,4 +146,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 5. 工作树行尾:仓库原以 CRLF 检出(`i/lf w/crlf`),已设 `core.autocrlf=false` 并从 index 还原成 LF,`git status` 为空自证内容零改动;HEAD 中本就有 30 个 `i/crlf` 文件未动。
 6. 工具链证据口径:`rustc --version` 由 rustup shim 输出为 `1.83.0-nightly (d6c8169c1 2024-09-03)`(即 nightly-2024-09-04 渠道构建),以 `rustup show active-toolchain` 作为判定命令。
 
-**已知债**:题解只面向六题断言,不追求通用性(如 HashMap 为 O(n));Docker 环境一致性未在本计划闭环,若线上 grading 与本地结论冲突,以线上为准并回退到镜像复核。
+**已知债**:
+- 题解只面向六题断言,不追求通用性(如 HashMap 为 O(n));Docker 环境一致性未在本计划闭环,若线上 grading 与本地结论冲突,以线上为准并回退到镜像复核。
+- 第 2 题用「拷贝内容 + 删源」兜底,**不保持 inode**;兜底非原子(中途失败留半成品);不支持目录改名;`RootDirectory::rename` 的原生 rename 分支(fatfs)在本套练习里不可达,属未测路径。
+- `arceos/axfs_ramfs/`(v0.1.1 拷贝)不在构建内:依赖解析到 crates.io 的 `axfs_ramfs 0.1.2`(`.d` 依赖文件指向 registry),只有 `[workspace.dependencies]` 的 path 条目、无 crate 用 `workspace = true`。STUDENT_GUIDE 让学生读它属于课程侧文档与构建不一致,已在 M2 记录,不擅自修。
