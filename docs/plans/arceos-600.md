@@ -89,7 +89,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 | M0 | ✅ | 工具链/交叉编译/qemu/mtools 四项复核通过(rustup active-toolchain=nightly-2024-09-04,musl 11.2.1,qemu 8.2.2,mcopy 4.0.32);六题逐题 timeout 基线全非 0(print 17s, ramfs 159s, alt_alloc 17s, hashmap 13s, sys_map 179s, simple_hv exit124@315s),pass 数 0;git status 空 |
 | M1 | ✅ | 本地两次 test-print 均 pass,审核者复跑一次 pass(exit 0);commit 142bbd1 仅改 print_with_color/main.rs(2+/1-),`git diff HEAD~1..HEAD -- '*test*'` 空;push 后 run 45321328396:grade job=failure(未满六题,设计内)、upload job=success(OpenCamp accepted);榜单 rank62 score=100 |
 | M2 | ✅ | 审核者复跑 `test-ramfs_rename.sh` → `[Ramfs-Rename]: ok!` + `ramfs_rename pass`,exit 0(149 s);commit 5a01d21 仅改 `modules/axfs/src/root.rs`(+71/-10),`-- '*test*'` 空;第 1 题回归 pass;工作树干净 |
-| M3 | ⬜ | — |
+| M3 | ✅ | 审核者复跑 `test-alt_alloc.sh` → `Bump tests run OK!` + `alt_alloc pass`,exit 0(50 s),第 1 题回归 pass(17 s);commit 211bbc7 仅改 `bump_allocator/src/lib.rs`(+159)与 `alt_axalloc/src/lib.rs`(+13),`-- '*test*'` 空;实现为双端 bump,越界返回 NoMemory |
 | M4 | ⬜ | — |
 | M5 | ⬜ | — |
 | M6 | ⬜ | — |
@@ -149,4 +149,6 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 **已知债**:
 - 题解只面向六题断言,不追求通用性(如 HashMap 为 O(n));Docker 环境一致性未在本计划闭环,若线上 grading 与本地结论冲突,以线上为准并回退到镜像复核。
 - 第 2 题用「拷贝内容 + 删源」兜底,**不保持 inode**;兜底非原子(中途失败留半成品);不支持目录改名;`RootDirectory::rename` 的原生 rename 分支(fatfs)在本套练习里不可达,属未测路径。
+- 第 3 题的 EarlyAllocator:页区只增不减(`dealloc_pages` 空实现);`add_memory` 只支持单个连续区间;`axhal::paging`/`axmm`/`axdma` 仍硬编码 `axalloc::global_allocator`,只有 `axruntime`/`axstd` 入口在 `alt_alloc` 下走 `alt_axalloc`(同开 alloc+alt_alloc 会重复定义 `init_allocator`)。
+- WSL 侧 git 无 `user.name/user.email`,所有提交在 Windows 侧执行(两侧同一工作树),不改 git 配置。
 - `arceos/axfs_ramfs/`(v0.1.1 拷贝)不在构建内:依赖解析到 crates.io 的 `axfs_ramfs 0.1.2`(`.d` 依赖文件指向 registry),只有 `[workspace.dependencies]` 的 path 条目、无 crate 用 `workspace = true`。STUDENT_GUIDE 让学生读它属于课程侧文档与构建不一致,已在 M2 记录,不擅自修。
