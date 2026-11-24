@@ -99,6 +99,17 @@ impl RootDirectory {
             f(self.mounts[idx].fs.clone(), &path[max_len..]) // matched at `idx`
         }
     }
+
+    /// Finds the filesystem that `path` belongs to, and returns the path
+    /// relative to the mount point of that filesystem.
+    fn lookup_mounted_fs_path(&self, path: &str) -> AxResult<(Arc<dyn VfsOps>, String)> {
+        let mut rest_path = String::new();
+        let fs = self.lookup_mounted_fs(path, |fs, rest| {
+            rest_path = String::from(rest);
+            Ok(fs)
+        })?;
+        Ok((fs, rest_path))
+    }
 }
 
 impl VfsNodeOps for RootDirectory {
@@ -132,14 +143,55 @@ impl VfsNodeOps for RootDirectory {
         })
     }
 
+    /// Renames a file or directory inside a single mounted filesystem.
+    ///
+    /// Filesystems that do not implement
+    /// [`VfsNodeOps::rename`](axfs_vfs::VfsNodeOps::rename) (e.g. the RAM
+    /// filesystem) are handled by copying the file content into a new node and
+    /// then removing the source node.
     fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
-        self.lookup_mounted_fs(src_path, |fs, rest_path| {
-            if rest_path.is_empty() {
-                ax_err!(PermissionDenied) // cannot rename mount points
-            } else {
-                fs.root_dir().rename(rest_path, dst_path)
+        let (src_fs, src_rest) = self.lookup_mounted_fs_path(src_path)?;
+        let (dst_fs, dst_rest) = self.lookup_mounted_fs_path(dst_path)?;
+        if !Arc::ptr_eq(&src_fs, &dst_fs) {
+            return ax_err!(CrossesDevices, "cannot rename across filesystems");
+        }
+        if src_rest.is_empty() || dst_rest.is_empty() {
+            return ax_err!(PermissionDenied); // cannot rename mount points
+        }
+        // The source must exist before anything is changed.
+        let src = src_fs.root_dir().lookup(&src_rest)?;
+
+        // Prefer the filesystem's own implementation, which keeps the node and
+        // any open file handle alive.
+        match src_fs.root_dir().rename(&src_rest, &dst_rest) {
+            Ok(()) => return Ok(()),
+            Err(AxError::Unsupported) => {}
+            Err(e) => return Err(e),
+        }
+
+        // Fallback for filesystems without a `rename()` implementation: delete
+        // the destination node (as `rename()` replaces it, see `api::rename`),
+        // copy the content into a new node, then remove the source node.
+        if src.get_attr()?.is_dir() {
+            return ax_err!(Unsupported, "renaming a directory is not supported");
+        }
+        if src_fs.root_dir().lookup(&dst_rest).is_ok() {
+            src_fs.root_dir().remove(&dst_rest)?;
+        }
+        src_fs.root_dir().create(&dst_rest, VfsNodeType::File)?;
+        let dst = src_fs.root_dir().lookup(&dst_rest)?;
+        let mut buf = [0u8; 1024];
+        let mut offset = 0u64;
+        loop {
+            let n = src.read_at(offset, &mut buf)?;
+            if n == 0 {
+                break;
             }
-        })
+            dst.write_at(offset, &buf[..n])?;
+            offset += n as u64;
+        }
+        src_fs.root_dir().remove(&src_rest)?;
+        Ok(())
     }
 }
 
@@ -301,10 +353,19 @@ pub(crate) fn set_current_dir(path: &str) -> AxResult {
     }
 }
 
+/// Renames a file or directory. Both paths are resolved to absolute paths
+/// first, then the target filesystem takes care of the actual rename.
 pub(crate) fn rename(old: &str, new: &str) -> AxResult {
-    if parent_node_of(None, new).lookup(new).is_ok() {
-        warn!("dst file already exist, now remove it");
-        remove_file(None, new)?;
+    if old.is_empty() || new.is_empty() {
+        return ax_err!(NotFound);
     }
-    parent_node_of(None, old).rename(old, new)
+    let old_path = absolute_path(old)?;
+    let new_path = absolute_path(new)?;
+    if old_path == new_path {
+        return Ok(()); // rename to itself does nothing
+    }
+    if ROOT_DIR.contains(&old_path) || ROOT_DIR.contains(&new_path) {
+        return ax_err!(PermissionDenied); // cannot rename mount points
+    }
+    ROOT_DIR.clone().rename(&old_path, &new_path)
 }
