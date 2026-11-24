@@ -92,7 +92,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 | M3 | ✅ | 审核者复跑 `test-alt_alloc.sh` → `Bump tests run OK!` + `alt_alloc pass`,exit 0(50 s),第 1 题回归 pass(17 s);commit 211bbc7 仅改 `bump_allocator/src/lib.rs`(+159)与 `alt_axalloc/src/lib.rs`(+13),`-- '*test*'` 空;实现为双端 bump,越界返回 NoMemory |
 | M4 | ✅ | 审核者复跑 `test-support_hashmap.sh` → `Memory tests run OK!` + `support_hashmap pass`,exit 0(80 s);第 3 题回归 pass(52 s)、第 1 题回归 pass(18 s);commit f15bfaf 只动 `ulib/axstd`(新增 collections/hash_map.rs 465 行),无 unsafe、无调试输出,`-- '*test*'` 空 |
 | M5 | ✅ | 审核者复跑 `test-sys_map.sh` → `Read back content: hello, arceos!` + `MapFile ok!` + `sys_mmap pass`,exit 0(178 s);第 1 题(19 s)、第 3 题(53 s)回归 pass;commit bdc32d6 仅改 `exercises/sys_map/src/syscall.rs`(+92/-3),`-- '*test*'` 空 |
-| M6 | ⬜ | — |
+| M6 | ✅ | 审核者复跑 `test-simple_hv.sh` → 三次 VmExit(IllegalInstruction→LoadGuestPageFault gpa 0x40→VSuperEcall Reset)+`a0 = 0x6688, a1 = 0x1234`+`Shutdown vm normally!`+`simple_hv pass`,exit 0(164 s);第 1 题(17 s)、第 3 题(49 s)回归 pass;commit 657ea7d 只改 `exercises/simple_hv/src/` 四个文件(+213/-32),两个 `assert_eq` 仍在,`-- '*test*'` 空 |
 | M7 | ⬜ | — |
 
 ## 五、执行与审核规则
@@ -150,6 +150,8 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 - 题解只面向六题断言,不追求通用性(如 HashMap 为 O(n));Docker 环境一致性未在本计划闭环,若线上 grading 与本地结论冲突,以线上为准并回退到镜像复核。
 - 第 2 题用「拷贝内容 + 删源」兜底,**不保持 inode**;兜底非原子(中途失败留半成品);不支持目录改名;`RootDirectory::rename` 的原生 rename 分支(fatfs)在本套练习里不可达,属未测路径。
 - 第 3 题的 EarlyAllocator:页区只增不减(`dealloc_pages` 空实现);`add_memory` 只支持单个连续区间;`axhal::paging`/`axmm`/`axdma` 仍硬编码 `axalloc::global_allocator`,只有 `axruntime`/`axstd` 入口在 `alt_alloc` 下走 `alt_axalloc`(同开 alloc+alt_alloc 会重复定义 `init_allocator`)。
+- 第 6 题的根因是脚手架缺陷:`_guest_exit` 先恢复 hypervisor `sstatus`(重开 SIE)再恢复 `stvec`,timer 中断会重入并用 guest 的 `sscratch` 自陷成死循环;`vmexit_handler` 又用"活"的 `scause` 判因,会被嵌套中断改写。修法是 guest.S 记录 trap CSRs + guest 运行期屏蔽 `sie`;`tour/h_1_0` 同源脚手架有同样三个隐患(课程材料,未改)。
+- 第 6 题的 `handle_guest_page_fault` 非幂等(同页再缺页会 panic AlreadyExists),`htinst` 未使用,QEMU 的 stage-2 叶子 PTE 必须带 `USER` 位(实测过)。
 - 第 5 题只支持最小场景:`addr=NULL`、`MAP_PRIVATE`、`PROT_READ`、`offset=0`、文件 fd;其余返回 ENOSYS/EINVAL。用户载荷 `mapfile` 是 ET_DYN(PIE),现有 loader 不做重定位;`mapfile.c` 用 `addr == NULL` 判失败(而非 MAP_FAILED)。均未修,属课程侧遗留。
 - 第 4 题的 HashMap 是自实现(SwissTable 风格:ctrl 标签 + u32 槽位 + 稠密 entries),确定性 FNV-1a + splitmix,无 `entry()` API、无 `HashSet`/`RandomState`,单表上限 u32::MAX 条,迭代序为插入序;不抗碰撞 DoS。
 - 本地验收耗时受 `qemu.log` 影响:`scripts/make/qemu.mk` 默认 `QEMU_LOG=y` 把 `-d in_asm,int,mmu,pcall,cpu_reset,guest_errors` 写进 9p 上的 `arceos/qemu.log`,内存访问密集的题(如第 4 题)会从数秒放大到 80 s;CI 在本地盘上不受影响,本地一律 300 s 超时包裹。
