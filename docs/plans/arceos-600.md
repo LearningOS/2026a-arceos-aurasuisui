@@ -59,6 +59,7 @@
 | **D7** | 分数上传依赖 `STUDENT_GITHUB` 与 push 者一致 | Actions 的 `Save measured score and upload to OpenCamp` 为 success 且榜单命中 aurasuisui |
 | **D8** | 9p 上构建可能过慢 | 单题 `test-*.sh` 端到端 < 8 分钟;超时则启用 ext4 工作副本方案 |
 | **D9** | 产物误入版本库 | `git status --porcelain` 为空 |
+| **D10** | `scripts/*.sh` 无超时保护,本地第 6 题会永久挂起(实测 315 s 未退),`total-test.sh` 跑不出末行分数;CI 侧由 `grade.py` 的 90 s 兜底 | 本地一律用 `timeout -k 5 300 ./scripts/test-*.sh`;第 6 题返回 124 且无残留 qemu;仓库脚本保持不改(已达成 M0 实测) |
 
 ## 三、里程碑与出口条件
 
@@ -70,13 +71,13 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 
 | # | 里程碑 | 内容 | 出口条件(全部满足) |
 |---|---|---|---|
-| **M0** | WSL 环境补齐 + 基线 | 装 mtools/libclang-dev/libssl-dev;装 nightly-2024-09-04(含 rust-src、llvm-tools、clippy、rustfmt、riscv64gc-unknown-none-elf);装 musl 交叉编译器到 /opt 并校验 sha256;PATH 前置 qemu 8.2.2;跑一次全量自测 | 一、WSLTEST `rustc --version` 含 nightly-2024-09-04 二、WSLTEST `riscv64-linux-musl-gcc --version` 有输出 三、WSLTEST `qemu-system-riscv64 --version` 首行含 8.2 四、WSLTEST `mcopy -V` 有输出 五、WSLTEST `./scripts/total-test.sh` 末行 0 且 `test.output` 有 6 行 failed |
-| **M1** | 第 1 题彩色输出 + 打通推送链路 | 问候语带 ANSI 颜色且保留 `Hello, Arceos!`;过测后 commit 并 push,观察 Actions 与榜单 | WSLTEST `./scripts/test-print.sh` 打印 `print_with_color pass` 且 exit 0;`total-test.sh` 末行 >=100;`gh run list` 最新 grading conclusion=success 且上传 job success;榜单 `aurasuisui`=100 |
-| **M2** | 第 2 题 ramfs 改名 | RAM 文件系统同目录 rename,`/tmp/f1` 改名后读回内容 | WSLTEST `./scripts/test-ramfs_rename.sh` 打印 `ramfs_rename pass` 且 exit 0;总分 >=200 |
-| **M3** | 第 3 题替代分配器 | 练习走替代分配器,300 万元素向量分配与排序通过 | WSLTEST `./scripts/test-alt_alloc.sh` 打印 `alt_alloc pass` 且 exit 0;总分 >=300 |
-| **M4** | 第 4 题 HashMap | axstd 提供 `HashMap`,五万条插入与遍历断言通过 | WSLTEST `./scripts/test-support_hashmap.sh` 打印 `support_hashmap pass` 且 exit 0;总分 >=400 |
-| **M5** | 第 5 题文件映射 | 补齐文件映射系统调用,用户程序读回 `hello, arceos!` | WSLTEST `./scripts/test-sys_map.sh` 打印 `sys_map pass` 且 exit 0;总分 >=500 |
-| **M6** | 第 6 题 Hypervisor | 处理客体 VM 退出,`skernel2` 正常关机 | WSLTEST `./scripts/test-simple_hv.sh` 打印 `simple_hv pass` 且 exit 0;`total-test.sh` 末行 600 |
+| **M0** | WSL 环境补齐 + 基线 | 装 mtools/libclang-dev/libssl-dev;装 nightly-2024-09-04(含 rust-src、llvm-tools、clippy、rustfmt、riscv64gc-unknown-none-elf);装 musl 交叉编译器到 /opt 并校验 sha256;PATH 前置 qemu 8.2.2;工作树 CRLF 修回 LF;逐题跑基线 | 一、`rustup show active-toolchain` 含 nightly-2024-09-04 二、`riscv64-linux-musl-gcc --version` 首行含 11.2.1 三、`qemu-system-riscv64 --version` 首行含 8.2.2 四、`mcopy -V` 有输出 五、六题逐题 `timeout -k 5 300 ./scripts/test-*.sh` 全部非 0(pass 数 = 0) 六、`git status --porcelain` 为空 |
+| **M1** | 第 1 题彩色输出 + 打通推送链路 | 问候语带 ANSI 颜色且保留 `Hello, Arceos!`;过测后 commit 并 push,观察 Actions 与榜单 | WSLTEST `timeout -k 5 300 ./scripts/test-print.sh` 打印 `print_with_color pass` 且 exit 0;六题逐题 pass 数 >=1;最新 run 里 `Test exercises and calculate score` 跑完并给出分数(未满六题时该 job 预期为 failure,属设计内),`Save measured score and upload to OpenCamp` 为 success;榜单 `aurasuisui`=100 |
+| **M2** | 第 2 题 ramfs 改名 | RAM 文件系统同目录 rename,`/tmp/f1` 改名后读回内容 | WSLTEST `timeout -k 5 300 ./scripts/test-ramfs_rename.sh` 打印 `ramfs_rename pass` 且 exit 0;六题逐题 pass 数 >=2 |
+| **M3** | 第 3 题替代分配器 | 练习走替代分配器,300 万元素向量分配与排序通过 | WSLTEST `timeout -k 5 300 ./scripts/test-alt_alloc.sh` 打印 `alt_alloc pass` 且 exit 0;六题逐题 pass 数 >=3 |
+| **M4** | 第 4 题 HashMap | axstd 提供 `HashMap`,五万条插入与遍历断言通过 | WSLTEST `timeout -k 5 300 ./scripts/test-support_hashmap.sh` 打印 `support_hashmap pass` 且 exit 0;六题逐题 pass 数 >=4 |
+| **M5** | 第 5 题文件映射 | 补齐文件映射系统调用,用户程序读回 `hello, arceos!` | WSLTEST `timeout -k 5 300 ./scripts/test-sys_map.sh` 打印 `sys_map pass` 且 exit 0;六题逐题 pass 数 >=5 |
+| **M6** | 第 6 题 Hypervisor | 处理客体 VM 退出,`skernel2` 正常关机 | WSLTEST `timeout -k 5 300 ./scripts/test-simple_hv.sh` 打印 `simple_hv pass` 且 exit 0;六题逐题 pass 数 = 6 |
 | **M7** | 最终 push 与晋级核对 | 六题全绿后 push 一次,等 Actions 上传,核对榜单;可选在 Docker 官方镜像复跑一次 total-test 做平价复核 | `gh run list` 最新 grading success 且上传 job success;榜单 `aurasuisui`=600;`git status --porcelain` 为空;若做 Docker 复核,其末行也是 600 |
 
 > 判定点:每个里程碑做完,执行者停下报待审核;审核者独立复跑后才置 ✅。
@@ -85,7 +86,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 
 | 里程碑 | 状态 | 证据 |
 |---|---|---|
-| M0 | ⬜ | — |
+| M0 | ✅ | 工具链/交叉编译/qemu/mtools 四项复核通过(rustup active-toolchain=nightly-2024-09-04,musl 11.2.1,qemu 8.2.2,mcopy 4.0.32);六题逐题 timeout 基线全非 0(print 17s, ramfs 159s, alt_alloc 17s, hashmap 13s, sys_map 179s, simple_hv exit124@315s),pass 数 0;git status 空 |
 | M1 | ⬜ | — |
 | M2 | ⬜ | — |
 | M3 | ⬜ | — |
@@ -99,6 +100,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 - 一次只派一个里程碑;执行者只报待审核,不得改本文件。
 - 四件必报:验证命令原样输出 / 测试计数 / commit 列表 / 做法与偏离。
 - 审核者独立复跑:用同一段 WSLTEST 自己再跑一遍,不看执行者的截图或转述。
+- 本地验收一律加超时:`timeout -k 5 300 ./scripts/test-*.sh`(见 D10);`total-test.sh` 本地不可用,总分按 100 × pass 数自行计算。
 - 每轮必查 `git diff --stat` 边界与 `git diff -- '*test*'`,确认未改测试脚本、未放宽断言。
 - 提交在 Windows 侧仓库(WSL 侧是同一份文件),push 前后都查 `git status --porcelain`。
 - 不可逆动作:`git push origin main` 触发全量重测并上传分数,人类已授权,M1 与 M7 各推一次,其余里程碑不 push。
@@ -141,5 +143,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 2. 验收口径 = WSL 内 `scripts/test-*.sh` 的 pass 断言,与 CI `.github/scripts/grade.py` 的 MESSAGES 同源。
 3. qemu 一律用 `~/qemu-8.2.2/build` 前置 PATH,与 CI 的 8.2.2 对齐,不用系统 6.2。
 4. 每题独立提交,push 只做 M1 与 M7 两次。
+5. 工作树行尾:仓库原以 CRLF 检出(`i/lf w/crlf`),已设 `core.autocrlf=false` 并从 index 还原成 LF,`git status` 为空自证内容零改动;HEAD 中本就有 30 个 `i/crlf` 文件未动。
+6. 工具链证据口径:`rustc --version` 由 rustup shim 输出为 `1.83.0-nightly (d6c8169c1 2024-09-03)`(即 nightly-2024-09-04 渠道构建),以 `rustup show active-toolchain` 作为判定命令。
 
 **已知债**:题解只面向六题断言,不追求通用性(如 HashMap 为 O(n));Docker 环境一致性未在本计划闭环,若线上 grading 与本地结论冲突,以线上为准并回退到镜像复核。
