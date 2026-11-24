@@ -93,6 +93,20 @@ _guest_exit:
     /* Pull GuestInfo out of sscratch, swapping with guest's a0 */
     csrrw a0, sscratch, a0
 
+    /* Save guest t0 first, so it can be reused to record the exit reason. */
+    sd   t0, ({guest_t0})(a0)
+
+    /* Record the trap CSRs now: they would be overwritten by a nested trap taken
+       while the hypervisor handles this exit with interrupts enabled again. */
+    csrr  t0, scause
+    sd    t0, ({trap_scause})(a0)
+    csrr  t0, stval
+    sd    t0, ({trap_stval})(a0)
+    csrr  t0, htval
+    sd    t0, ({trap_htval})(a0)
+    csrr  t0, htinst
+    sd    t0, ({trap_htinst})(a0)
+
     /* Save guest GPRs. */
     sd   ra, ({guest_ra})(a0)
     sd   gp, ({guest_gp})(a0)
@@ -116,7 +130,6 @@ _guest_exit:
     sd   s9, ({guest_s9})(a0)
     sd   s10, ({guest_s10})(a0)
     sd   s11, ({guest_s11})(a0)
-    sd   t0, ({guest_t0})(a0)
     sd   t1, ({guest_t1})(a0)
     sd   t2, ({guest_t2})(a0)
     sd   t3, ({guest_t3})(a0)

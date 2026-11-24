@@ -113,6 +113,20 @@ macro_rules! guest_csr_offset {
     };
 }
 
+/// Offsets of the trap information that `_guest_exit` records on a VM exit.
+///
+/// The exit cause must be captured by the trap handler itself: once the hypervisor
+/// handles the exit with interrupts enabled again, a nested trap (e.g. the timer
+/// interrupt) would overwrite the live `scause`/`stval`/`htval` CSRs.
+const TRAP_SCAUSE_OFFSET: usize =
+    offset_of!(VmCpuRegisters, trap_csrs) + offset_of!(VmCpuTrapState, scause);
+const TRAP_STVAL_OFFSET: usize =
+    offset_of!(VmCpuRegisters, trap_csrs) + offset_of!(VmCpuTrapState, stval);
+const TRAP_HTVAL_OFFSET: usize =
+    offset_of!(VmCpuRegisters, trap_csrs) + offset_of!(VmCpuTrapState, htval);
+const TRAP_HTINST_OFFSET: usize =
+    offset_of!(VmCpuRegisters, trap_csrs) + offset_of!(VmCpuTrapState, htinst);
+
 global_asm!(
     include_str!("guest.S"),
     hyp_ra = const hyp_gpr_offset(GprIndex::RA),
@@ -178,6 +192,11 @@ global_asm!(
     guest_hstatus = const guest_csr_offset!(hstatus),
     guest_scounteren = const guest_csr_offset!(scounteren),
     guest_sepc = const guest_csr_offset!(sepc),
+
+    trap_scause = const TRAP_SCAUSE_OFFSET,
+    trap_stval = const TRAP_STVAL_OFFSET,
+    trap_htval = const TRAP_HTVAL_OFFSET,
+    trap_htinst = const TRAP_HTINST_OFFSET,
 
 );
 
