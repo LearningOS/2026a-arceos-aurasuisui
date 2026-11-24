@@ -90,7 +90,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 | M1 | ✅ | 本地两次 test-print 均 pass,审核者复跑一次 pass(exit 0);commit 142bbd1 仅改 print_with_color/main.rs(2+/1-),`git diff HEAD~1..HEAD -- '*test*'` 空;push 后 run 45321328396:grade job=failure(未满六题,设计内)、upload job=success(OpenCamp accepted);榜单 rank62 score=100 |
 | M2 | ✅ | 审核者复跑 `test-ramfs_rename.sh` → `[Ramfs-Rename]: ok!` + `ramfs_rename pass`,exit 0(149 s);commit 5a01d21 仅改 `modules/axfs/src/root.rs`(+71/-10),`-- '*test*'` 空;第 1 题回归 pass;工作树干净 |
 | M3 | ✅ | 审核者复跑 `test-alt_alloc.sh` → `Bump tests run OK!` + `alt_alloc pass`,exit 0(50 s),第 1 题回归 pass(17 s);commit 211bbc7 仅改 `bump_allocator/src/lib.rs`(+159)与 `alt_axalloc/src/lib.rs`(+13),`-- '*test*'` 空;实现为双端 bump,越界返回 NoMemory |
-| M4 | ⬜ | — |
+| M4 | ✅ | 审核者复跑 `test-support_hashmap.sh` → `Memory tests run OK!` + `support_hashmap pass`,exit 0(80 s);第 3 题回归 pass(52 s)、第 1 题回归 pass(18 s);commit f15bfaf 只动 `ulib/axstd`(新增 collections/hash_map.rs 465 行),无 unsafe、无调试输出,`-- '*test*'` 空 |
 | M5 | ⬜ | — |
 | M6 | ⬜ | — |
 | M7 | ⬜ | — |
@@ -150,5 +150,7 @@ wsl.exe -d Ubuntu-2204 -e bash -lc 'cd /mnt/c/Users/aurasui/Desktop/Anything/Lea
 - 题解只面向六题断言,不追求通用性(如 HashMap 为 O(n));Docker 环境一致性未在本计划闭环,若线上 grading 与本地结论冲突,以线上为准并回退到镜像复核。
 - 第 2 题用「拷贝内容 + 删源」兜底,**不保持 inode**;兜底非原子(中途失败留半成品);不支持目录改名;`RootDirectory::rename` 的原生 rename 分支(fatfs)在本套练习里不可达,属未测路径。
 - 第 3 题的 EarlyAllocator:页区只增不减(`dealloc_pages` 空实现);`add_memory` 只支持单个连续区间;`axhal::paging`/`axmm`/`axdma` 仍硬编码 `axalloc::global_allocator`,只有 `axruntime`/`axstd` 入口在 `alt_alloc` 下走 `alt_axalloc`(同开 alloc+alt_alloc 会重复定义 `init_allocator`)。
+- 第 4 题的 HashMap 是自实现(SwissTable 风格:ctrl 标签 + u32 槽位 + 稠密 entries),确定性 FNV-1a + splitmix,无 `entry()` API、无 `HashSet`/`RandomState`,单表上限 u32::MAX 条,迭代序为插入序;不抗碰撞 DoS。
+- 本地验收耗时受 `qemu.log` 影响:`scripts/make/qemu.mk` 默认 `QEMU_LOG=y` 把 `-d in_asm,int,mmu,pcall,cpu_reset,guest_errors` 写进 9p 上的 `arceos/qemu.log`,内存访问密集的题(如第 4 题)会从数秒放大到 80 s;CI 在本地盘上不受影响,本地一律 300 s 超时包裹。
 - WSL 侧 git 无 `user.name/user.email`,所有提交在 Windows 侧执行(两侧同一工作树),不改 git 配置。
 - `arceos/axfs_ramfs/`(v0.1.1 拷贝)不在构建内:依赖解析到 crates.io 的 `axfs_ramfs 0.1.2`(`.d` 依赖文件指向 registry),只有 `[workspace.dependencies]` 的 path 条目、无 crate 用 `workspace = true`。STUDENT_GUIDE 让学生读它属于课程侧文档与构建不一致,已在 M2 记录,不擅自修。
